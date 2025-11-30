@@ -1,3 +1,17 @@
+.venv/
+*.xlsx
+*.xls
+*.csv
+*.rar
+*.zip
+__pycache__/  
+*.png
+*.jpg 
+*.bat
+*.lnk
+
+
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
