@@ -13,7 +13,7 @@ def LOG(msg, echo=True):
     logfile = 'LOG.xlsx'
     if(echo):
         print(msg)
-        
+
     return 0
     try:
         log = pd.read_excel(logfile, index_col=0)
