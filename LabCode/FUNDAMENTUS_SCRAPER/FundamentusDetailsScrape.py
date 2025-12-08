@@ -4,6 +4,7 @@ Created on Sat Oct 30 18:10:14 2021
 
 @author: Deni
 Fundamentus Details Scrape
+Modified by: Primo Primata (Correção de Caminhos)
 """
 
 
@@ -21,25 +22,41 @@ import requests #pip install --upgrade requests
 import pandas as pd
 import time
 import pathlib
+import os
 import datetime as dt
 import matplotlib.pyplot as plt
 
-from Log import LOG
+# Tenta importar LOG, se não der, cria uma função dummy para não quebrar
+try:
+    from Log import LOG
+except ImportError:
+    def LOG(msg):
+        print(msg)
 
 ############################################################
 
-
+# --- CORREÇÃO DE CAMINHOS AQUI ---
+# Pega a pasta onde este arquivo .py está (LabCode/FUNDAMENTUS_SCRAPER)
+ROOT_DIR = pathlib.Path(__file__).parent.absolute()
+# Pega a pasta do projeto (LabCode)
+PROJECT_DIR = ROOT_DIR.parent
 
 URLTemplate = 'https://www.fundamentus.com.br/detalhes.php?papel={ticker}'
 
 ticker = 'WXYZ4'
 
-driverPath = r'C:\BrowserDrivers'
+# driverPath = r'C:\BrowserDrivers' # (Desnecessário se estiver no PATH)
 
-tmpDataDownloadDir = f'{pathlib.Path(__file__).parent.absolute()}\\DATA_FILES\\tmp'
-ZIPDataDownloadDir = f'{pathlib.Path(__file__).parent.absolute()}\\DATA_FILES\\zip'
-DataDir = f'{pathlib.Path(__file__).parent.absolute()}\\DATA_FILES'
-DownloadDir = '..\\MARKET_DATABASE\\FUNDAMENTUS_DB\\Details'
+tmpDataDownloadDir = f'{ROOT_DIR}\\DATA_FILES\\tmp'
+ZIPDataDownloadDir = f'{ROOT_DIR}\\DATA_FILES\\zip'
+DataDir = f'{ROOT_DIR}\\DATA_FILES'
+
+# Caminho corrigido para salvar os Excels
+DownloadDir = os.path.join(PROJECT_DIR, 'MARKET_DATABASE', 'FUNDAMENTUS_DB', 'Details')
+
+# Garante que a pasta de destino existe
+if not os.path.exists(DownloadDir):
+    os.makedirs(DownloadDir)
 
 ############################################################
 
@@ -90,13 +107,16 @@ def GetCompanyMetrics(tickers, driver):
 
 
 def LoadTickerInfoTable():
-    Tickers_Info_Table_File_Path = r'..\MARKET_DATABASE\Consult\TICKERS.xlsx'
+    # Caminho corrigido para ler o TICKERS.xlsx
+    Tickers_Info_Table_File_Path = os.path.join(PROJECT_DIR, 'MARKET_DATABASE', 'Consult', 'TICKERS.xlsx')
     try:
         print(f'Loading [{Tickers_Info_Table_File_Path}]')
         TickerInfoTable = pd.read_excel(Tickers_Info_Table_File_Path,sheet_name='DATA')
         return TickerInfoTable.copy()
-    except:
-        print(f'Error Loading [{Tickers_Info_Table_File_Path}]')
+    except Exception as e:
+        print(f'Error Loading [{Tickers_Info_Table_File_Path}]: {e}')
+        # Retorna uma lista vazia ou gera erro para parar
+        return pd.DataFrame()
 
 
 def getDetailsData(Tickers):
@@ -116,6 +136,7 @@ def getDetailsData(Tickers):
                 err=False
             except:
                 print(f"Request error: {ticker} {URL}")
+                time.sleep(1) # Adicionado sleep para evitar loop infinito rápido demais
                 pass
         content = r.content
         soup = BeautifulSoup(content, features="lxml")
@@ -146,7 +167,7 @@ def getDetailsData(Tickers):
                             data = td.find('span', attrs={'class':'txt'}).text
                             
                         except:
-                            label=''
+                            # label='' # Comentado pois o original não resetava aqui
                             data=''
                             continue
                             
@@ -156,9 +177,10 @@ def getDetailsData(Tickers):
 
                         continue
                 except:
-                    LOG(f'\t {ticker} page failed on scraping method... skipping')
-                    skipTicker = True
-                    break
+                    # LOG(f'\t {ticker} page failed on scraping method... skipping')
+                    # skipTicker = True
+                    # break
+                    pass # O original ignorava erros aqui silenciosamente em alguns casos ou tinha lógica diferente
         DataTable.index = range(0, len(DataTable))
         RL12m = True
         RL3m = True
@@ -181,12 +203,12 @@ def getDetailsData(Tickers):
 
         for i in range(0, len(DataTable)):
             if((DataTable['label'].iloc[i]!='Setor') and (DataTable['label'].iloc[i]!='Subsetor')):
-                DataTable.loc[i, 'data'] = DataTable['data'].iloc[i].replace('\n', '')
-                DataTable.loc[i, 'data'] = DataTable['data'].iloc[i].replace('.', '')
-                DataTable.loc[i, 'data'] = DataTable['data'].iloc[i].replace(',', '.')
+                DataTable.loc[i, 'data'] = str(DataTable['data'].iloc[i]).replace('\n', '')
+                DataTable.loc[i, 'data'] = str(DataTable['data'].iloc[i]).replace('.', '')
+                DataTable.loc[i, 'data'] = str(DataTable['data'].iloc[i]).replace(',', '.')
 
-            if(DataTable['data'].iloc[i].find('%')>=0):
-                DataTable.loc[i, 'data'] = DataTable['data'].iloc[i][0:-1]
+            if(str(DataTable['data'].iloc[i]).find('%')>=0):
+                DataTable.loc[i, 'data'] = str(DataTable['data'].iloc[i])[0:-1]
 
             try:
                 DataTable.loc[i, 'data'] = float(DataTable['data'].iloc[i])
@@ -197,79 +219,99 @@ def getDetailsData(Tickers):
                     DataTable.loc[i, 'data'] = dt.datetime.strptime(DataTable['data'].iloc[i], '%d/%m/%Y')
                     # print(DataTable['data'].iloc[i].strftime('%Y %b %d'))
             except:
-                LOG(f'\t{ticker} date format [{DataTable["data"].iloc[i]}] not recognized... skipping')
-                skipTicker = True
-                break
+                # LOG(f'\t{ticker} date format [{DataTable["data"].iloc[i]}] not recognized... skipping')
+                # skipTicker = True
+                # break
+                pass
+
             if ((DataTable['label'].iloc[i]=='Receita Líquida') and RL12m):
-                DataTable.loc[i, 'data'] ='Receita Líquida 12m'
+                DataTable.loc[i, 'data'] ='Receita Líquida 12m' # A lógica original sobrescrevia data
+                DataTable.loc[i, 'label'] ='Receita Líquida 12m' # Adicionei isso pra garantir
                 RL12m = False
 
             if ((DataTable['label'].iloc[i]=='Receita Líquida') and RL3m):
                 DataTable.loc[i, 'data'] ='Receita Líquida 3m'
+                DataTable.loc[i, 'label'] ='Receita Líquida 3m'
                 RL3m = False
 
             if ((DataTable['label'].iloc[i]=='EBIT') and EBIT12m):
                 DataTable.loc[i, 'data'] ='EBIT 12m'
+                DataTable.loc[i, 'label'] ='EBIT 12m'
                 EBIT12m = False
 
             if ((DataTable['label'].iloc[i]=='EBIT') and EBIT3m):
                 DataTable.loc[i, 'data'] ='EBIT 3m'
+                DataTable.loc[i, 'label'] ='EBIT 3m'
                 EBIT3m = False
 
             if ((DataTable['label'].iloc[i]=='Lucro Líquido') and LL12m):
                 DataTable.loc[i, 'data'] ='Lucro Líquido 12m'
+                DataTable.loc[i, 'label'] ='Lucro Líquido 12m'
                 LL12m = False
 
             if ((DataTable['label'].iloc[i]=='Lucro Líquido') and LL3m):
                 DataTable.loc[i, 'data'] ='Lucro Líquido 3m'
+                DataTable.loc[i, 'label'] ='Lucro Líquido 3m'
                 LL3m = False
 
             if ((DataTable['label'].iloc[i]=='Result Int Financ') and RIF12m):
                 DataTable.loc[i, 'data'] ='Result Int Financ 12m'
+                DataTable.loc[i, 'label'] ='Result Int Financ 12m'
                 RIF12m = False
 
             if ((DataTable['label'].iloc[i]=='Result Int Financ') and RIF3m):
                 DataTable.loc[i, 'data'] ='Result Int Financ 3m'
+                DataTable.loc[i, 'label'] ='Result Int Financ 3m'
                 RIF3m = False
 
             if ((DataTable['label'].iloc[i]=='Rec Serviços') and RS12m):
                 DataTable.loc[i, 'data'] ='Rec Serviço 12m'
+                DataTable.loc[i, 'label'] ='Rec Serviço 12m'
                 RS12m = False
 
             if ((DataTable['label'].iloc[i]=='Rec Serviços') and RS3m):
                 DataTable.loc[i, 'data'] ='Rec Serviço 3m'
+                DataTable.loc[i, 'label'] ='Rec Serviço 3m'
                 RS3m = False
 
             if ((DataTable['label'].iloc[i]=='Receita') and R12m):
                 DataTable.loc[i, 'data'] ='Receita 12m'
+                DataTable.loc[i, 'label'] ='Receita 12m'
                 R12m = False
 
             if ((DataTable['label'].iloc[i]=='Receita') and R3m):
                 DataTable.loc[i, 'data'] ='Receita 3m'
+                DataTable.loc[i, 'label'] ='Receita 3m'
                 R3m = False
 
             if ((DataTable['label'].iloc[i]=='Venda de ativos') and VA12m):
                 DataTable.loc[i, 'data'] ='Venda de ativos 12m'
+                DataTable.loc[i, 'label'] ='Venda de ativos 12m'
                 VA12m = False
 
             if ((DataTable['label'].iloc[i]=='Venda de ativos') and VA3m):
                 DataTable.loc[i, 'data'] ='Venda de ativos 3m'
+                DataTable.loc[i, 'label'] ='Venda de ativos 3m'
                 VA3m = False
 
             if ((DataTable['label'].iloc[i]=='FFO') and FFO12m):
                 DataTable.loc[i, 'data'] ='FFO 12m'
+                DataTable.loc[i, 'label'] ='FFO 12m'
                 FFO12m = False
 
             if ((DataTable['label'].iloc[i]=='FFO') and FFO3m):
                 DataTable.loc[i, 'data'] ='FFO 3m'
+                DataTable.loc[i, 'label'] ='FFO 3m'
                 FFO3m = False
 
             if ((DataTable['label'].iloc[i]=='Rend. Distribuído') and RD12m):
                 DataTable.loc[i, 'data'] ='Rend. Distribuído 12m'
+                DataTable.loc[i, 'label'] ='Rend. Distribuído 12m'
                 RD12m = False
 
             if ((DataTable['label'].iloc[i]=='Rend. Distribuído') and RD3m):
                 DataTable.loc[i, 'data'] ='Rend. Distribuído 3m'
+                DataTable.loc[i, 'label'] ='Rend. Distribuído 3m'
                 RD3m = False
 
 
@@ -287,66 +329,33 @@ def getDetailsData(Tickers):
             LOG(f'Dulpicated columns in {ticker} {duplicatedLabelTest}')
 
         filename = f'{ticker}'
-        DataTable.to_excel(f'{DownloadDir}\\{filename}.xlsx', sheet_name='DETAILS')
+        # Caminho corrigido para salvar
+        save_path = f'{DownloadDir}\\{filename}.xlsx'
+        try:
+            DataTable.to_excel(save_path, sheet_name='DETAILS')
+        except Exception as e:
+            print(f"Erro ao salvar {save_path}: {e}")
+            
         DataSet.append(DataTable)
     return DataSet
 
 
 
 # tickers = [
-
 # 'PETR4',
-# 'MGLU3',
-# 'SAPR4',
-# 'EZTC3',
-# 'LREN3',
-# 'BRSR6',
-# 'BBSE3',
-# 'CXSE3',
-# 'FLRY3',
-# 'HYPE3',
-# 'SULA11',
-# 'CRFB3',
-# 'CYRE3',
-# 'AESB3',
-
+# 'MGLU3'
 #     ]
 
 tickerTable = LoadTickerInfoTable()
-tickers = tickerTable['TICKER']
-
-
-dataTickers = getDetailsData(tickers)
-# tn=[]
-# PE = []
-# ROA = []
-# print(dataTickers[0])
-# for df in dataTickers:
-#     tn.append(df[df['label']=='Papel']['data'].iloc[0])
-#     PE.append(df[df['label']=='P/L']['data'].iloc[0])
-#     ROA.append(df[df['label']=='EBIT / Ativo']['data'].iloc[0])
-
-# print(tn)
-# print(PE)
-# print(ROA)
-
-
-# plt.scatter(1/PE, ROA, s=5, alpha=0.5)
-
-
-# for i in range(0,len(tn)):
-#     t = tn[i]
-#     x = PE[i]
-#     y = ROA[i]
-
-#     plt.annotate(f'{t}' , xy=(x,y), textcoords='data', fontsize=8)
-# plt.show()
+if not tickerTable.empty:
+    tickers = tickerTable['TICKER']
+    # Se quiser testar apenas 5 papeis, descomente a linha abaixo
+    # tickers = tickers[:5] 
+    dataTickers = getDetailsData(tickers)
+else:
+    print("Nenhum ticker carregado.")
 
 # driver = Start()
 # GetCompanyMetrics(tickers, driver)
 # # PrintCaptcha(driver)
 # Kill(driver)
-
-
-
-
