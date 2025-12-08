@@ -12,6 +12,7 @@ __pycache__/
 
 #Excecoes
 !LabCode\MARKET_DATABASE\Consult\TICKERS.xlsx
+!LabCode\METHODS\MagicFormula\DatabaseResume.xlsx
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
