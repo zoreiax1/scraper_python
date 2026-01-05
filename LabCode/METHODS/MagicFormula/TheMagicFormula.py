@@ -144,9 +144,9 @@ def PerformMagic(df_data):
 
     df = df_data.dropna(subset=required).copy()
     
-    this_year = dt.datetime.now().year
-    this_month = dt.datetime.now().month
-    df = df[df["Data últ cot"] > dt.datetime(this_year, this_month, 1)]
+    # Fix: Use rolling window (60 days) instead of strict current month filter
+    cutoff_date = dt.datetime.now() - dt.timedelta(days=60)
+    df = df[df["Data últ cot"] > cutoff_date]
     df.reset_index(drop=True, inplace=True)
 
     # Dados
@@ -228,9 +228,9 @@ def AcquirersMult(df_data):
     df_data["EV / EBITDA"] = pd.to_numeric(df_data["EV / EBITDA"], errors='coerce')
     df = df_data.dropna(subset=required).copy()
     
-    this_year = dt.datetime.now().year
-    this_month = dt.datetime.now().month
-    df = df[df["Data últ cot"] > dt.datetime(this_year, this_month, 1)]
+    # Fix: Use rolling window (60 days) instead of strict current month filter
+    cutoff_date = dt.datetime.now() - dt.timedelta(days=60)
+    df = df[df["Data últ cot"] > cutoff_date]
     df.reset_index(drop=True, inplace=True)
 
     tn = df["Papel"]
